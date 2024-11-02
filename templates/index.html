@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner De RED</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .device {
+            margin: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .active {
+            background-color: #a8ff9e; /* Verde para activos */
+        }
+        .inactive {
+            background-color: #cccccc; /* Gris para inactivos */
+        }
+    </style>
+</head>
+<body>
+    <h1>Scanner De RED</h1>
+    <div>
+        <h2>Dispositivos activos en los últimos 2 minutos:</h2>
+        {% for ip, data in active_ips.items() %}
+            <div class="device active">
+                <strong>IP:</strong> {{ ip }} - <strong>Última actividad:</strong> {{ data['last_active'] }}
+            </div>
+        {% endfor %}
+    </div>
+    <hr>
+    <div>
+        <h2>Estado general de los dispositivos:</h2>
+        {% for ip, data in ip_status.items() %}
+            <div class="device {{ data['status'] }}">
+                <strong>IP:</strong> {{ ip }} - <strong>Estado:</strong> {{ data['status'] }}
+            </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

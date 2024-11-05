@@ -1,46 +1,75 @@
-from flask import Flask, render_template
 import os
-import time
-from datetime import datetime, timedelta
+import platform
+import ipaddress
+from flask import Flask, render_template, request, flash
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = Flask(__name__)
+app.secret_key = 'supersecretkey'  # Necesario para mostrar mensajes de flash
 
-# Lista de IPs a escanear
-ips = ["192.168.1.254", "192.168.1.73", 
-       "140.10.0.146","192.168.1.78","192.168.1.58"]
+# Variables para almacenar el estado de las IPs
+ip_status_storage = {}
+previous_active_ips = set()
 
-# Diccionario para almacenar el estado de cada IP y el último tiempo activo
-ip_status = {ip: {'status': 'inactive', 'last_active': None} for ip in ips}
-
-# Función para hacer ping a una IP y actualizar el estado en el diccionario
+# Función para hacer ping a una IP
 def ping_ip(ip):
-    response = os.system(f"ping -c 1 -w2 {ip} > /dev/null 2>&1")
-    if response == 0:
-        ip_status[ip]['status'] = 'active'
-        ip_status[ip]['last_active'] = datetime.now()
-    else:
-        # Si ya no responde, se actualiza a inactivo si ha pasado el tiempo
-        if ip_status[ip]['last_active'] and datetime.now() - ip_status[ip]['last_active'] > timedelta(minutes=2):
-            ip_status[ip]['status'] = 'inactive'
+    param = "-n 1" if platform.system().lower() == "windows" else "-c 1"
+    command = f"ping {param} -w 2 {ip}"
+    response = os.system(command)
+    return ip, response == 0  # Retornar la IP y su estado (True/False)
+
+# Función para escanear una red basada en el rango CIDR
+def scan_network(cidr):
+    try:
+        network = ipaddress.ip_network(cidr, strict=False)
+        ip_status = {}
+        
+        # Usar ThreadPoolExecutor para hacer ping en paralelo
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            futures = {executor.submit(ping_ip, str(ip)): str(ip) for ip in network.hosts()}
+            for future in as_completed(futures):
+                ip, status = future.result()
+                ip_status[ip] = "active" if status else "inactive"
+        
+        return ip_status
+    except ValueError:
+        flash("Rango de IP inválido")
+        return {}
 
 # Ruta principal
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def network_scan():
-    # Escanear las IPs
-    for ip in ips:
-        ping_ip(ip)
-    
-    # Filtrar los dispositivos activos en los últimos 2 minutos
-    two_minutes_ago = datetime.now() - timedelta(minutes=2)
-    active_ips = {
-        ip: data for ip, data in ip_status.items()
-        if data['status'] == 'active' and data['last_active'] >= two_minutes_ago
-    }
-    
-    # Ordenar por última actividad
-    active_ips = dict(sorted(active_ips.items(), key=lambda item: item[1]['last_active'], reverse=True))
+    global previous_active_ips
+    if request.method == 'POST':
+        cidr = request.form.get('cidr')
+        
+        if cidr:
+            current_ip_status = scan_network(cidr)  # Escanear la red y actualizar el estado
+            
+            # Filtrar las IPs activas e inactivas
+            active_ips = {ip: status for ip, status in current_ip_status.items() if status == "active"}
+            inactive_ips = {ip: status for ip, status in current_ip_status.items() if status == "inactive"}
+            
+            # Verificar si hay alguna IP que estaba activa y ahora está inactiva
+            disconnected_ips = previous_active_ips - set(active_ips.keys())
+            previous_active_ips = set(active_ips.keys())  # Actualizar las IPs activas
 
-    return render_template('index.html', active_ips=active_ips, ip_status=ip_status)
+            # Solo se mostrará la IP que se ha desconectado
+            if disconnected_ips:
+                inactive_ips = {ip: "inactive" for ip in disconnected_ips}
+            else:
+                inactive_ips = {}
+
+        else:
+            flash('Por favor, ingrese un rango CIDR válido.')
+            active_ips = {}
+            inactive_ips = {}
+
+    else:
+        active_ips = {}
+        inactive_ips = {}
+
+    return render_template('index.html', active_ips=active_ips, inactive_ips=inactive_ips)
 
 if __name__ == '__main__':
     app.run(debug=True)

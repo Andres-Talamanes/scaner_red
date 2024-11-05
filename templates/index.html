@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scanner De RED</title>
+    <title>Scanner de RED</title>
     <style>
         body {
             font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            color: #333;
         }
         .device {
             margin: 10px;
@@ -19,24 +21,49 @@
         .inactive {
             background-color: #cccccc; /* Gris para inactivos */
         }
+        form {
+            margin-bottom: 20px;
+        }
+        .alert {
+            color: red;
+        }
     </style>
 </head>
 <body>
-    <h1>Scanner De RED</h1>
+    <h1>Scanner de RED</h1>
+    
+    <!-- Mensaje de alerta para errores -->
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul class="alert">
+            {% for message in messages %}
+                <li>{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Formulario para agregar el rango CIDR -->
+    <form action="/" method="POST">
+        <label for="cidr">Ingrese el rango CIDR (e.g., 192.168.1.0/24):</label>
+        <input type="text" name="cidr" id="cidr" required>
+        <button type="submit">Escanear</button>
+    </form>
+    
     <div>
-        <h2>Dispositivos activos en los últimos 2 minutos:</h2>
-        {% for ip, data in active_ips.items() %}
+        <h2>Dispositivos activos:</h2>
+        {% for ip, status in active_ips.items() %}
             <div class="device active">
-                <strong>IP:</strong> {{ ip }} - <strong>Última actividad:</strong> {{ data['last_active'] }}
+                <strong>IP:</strong> {{ ip }} - <strong>Estado:</strong> {{ status }}
             </div>
         {% endfor %}
     </div>
-    <hr>
+    
     <div>
-        <h2>Estado general de los dispositivos:</h2>
-        {% for ip, data in ip_status.items() %}
-            <div class="device {{ data['status'] }}">
-                <strong>IP:</strong> {{ ip }} - <strong>Estado:</strong> {{ data['status'] }}
+        <h2>Dispositivos inactivos (desconectados):</h2>
+        {% for ip, status in inactive_ips.items() %}
+            <div class="device inactive">
+                <strong>IP:</strong> {{ ip }} - <strong>Estado:</strong> {{ status }}
             </div>
         {% endfor %}
     </div>
